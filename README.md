@@ -21,3 +21,10 @@ To set up the environment:
 conda install jupyter numpy matplotlib scikit-learn scipy pandas
 pip3 install pyqt5
 ```
+
+The final GUI is the following.
+![GUI Exercise 2](./img/exercise2/gui_exercise2.png)
+
+The GUI makes possible to switch the function from the default to other two. After the change, the respective boundaries will automatically adapt. 
+Furthermore, it is possible to hide the grid and change the boundaries of the plot inside the shown period.  
+The buttons in the last row are used to simulate a 'real-time' data visualization. It is possible to start, stop, re-start, and reset the simulation.
