@@ -1,3 +1,4 @@
+import time
 from PyQt5.QtWidgets import (
     QVBoxLayout,
     QWidget,
@@ -10,7 +11,7 @@ from PyQt5.QtWidgets import (
     QComboBox,
     QDoubleSpinBox,
 )
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, QRunnable, QThreadPool
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg
 from plotting import PlotFunction
 import math
@@ -43,6 +44,12 @@ class MainWindow(QWidget):
         # function h(t)
         self.plot = PlotFunction()
         self.plot.plot()
+        self.percentage_to_visualize = 1.0
+
+        self.worker = None
+        self.threadpool = QThreadPool()
+        self.stop_worker = False
+        self.reset_worker = False
 
         self.setWindowTitle("Driverless recruitment")
         self.__define_layout()
@@ -97,15 +104,16 @@ class MainWindow(QWidget):
 
         layout.addLayout(x_zoom_layout)
 
-        # # Buttons
-        # buttons_layout = QHBoxLayout()
-        # self.start_button = QPushButton("Start")
-        # self.stop_button = QPushButton("Stop")
-        # self.reset_button = QPushButton("Reset")
-        # buttons_layout.addWidget(self.start_button)
-        # buttons_layout.addWidget(self.stop_button)
-        # buttons_layout.addWidget(self.reset_button)
-        # layout.addLayout(buttons_layout)
+        # Buttons
+        layout.addWidget(QLabel("Simulation live data"))
+        buttons_layout = QHBoxLayout()
+        self.start_button = QPushButton("Start")
+        self.stop_button = QPushButton("Stop")
+        self.reset_button = QPushButton("Reset")
+        buttons_layout.addWidget(self.start_button)
+        buttons_layout.addWidget(self.stop_button)
+        buttons_layout.addWidget(self.reset_button)
+        layout.addLayout(buttons_layout)
 
         # self.experiment_name_edit = QLineEdit()
         # self.experiment_name_edit.setPlaceholderText("Enter the experiment name")
@@ -144,6 +152,9 @@ class MainWindow(QWidget):
         self.input_start_x.valueChanged.connect(self.__start_x_change)
         self.input_end_x.valueChanged.connect(self.__end_x_change)
         self.function_combo.currentIndexChanged.connect(self.__function_changed)
+        self.start_button.clicked.connect(self.start_event)
+        self.stop_button.clicked.connect(self.stop_event)
+        self.reset_button.clicked.connect(self.reset_event)
 
     def __grid_change(self, s):
         if s == Qt.Checked:
@@ -168,3 +179,71 @@ class MainWindow(QWidget):
 
     def __function_changed(self, i):  # i is an int
         self.__reset_layout()
+
+    def get_percentage(self):
+        return self.percentage_to_visualize
+
+    def set_percentage(self, val):
+        self.percentage_to_visualize = val
+        bounds = self.__get_x_bounds()
+        # simulate live data with update of the plot bounds
+        self.input_end_x.setValue(bounds[1] * val)
+
+    def start_event(self):
+        def change_percentage():
+            perc = self.get_percentage()
+            if perc == 1.0:
+                perc = 0.0
+            while perc <= 1.0:
+                self.set_percentage(perc)
+                time.sleep(0.1)
+
+                if self.__get_stop_worker():
+                    self.__set_stop_worker(False)
+                    break
+
+                if self.__get_reset_worker():
+                    self.__set_reset_worker(False)
+                    self.set_percentage(1.0)
+                    break
+                perc += 0.01
+
+        self.stop_worker = False
+        self.reset_worker = False
+        self.worker = Worker(fn=change_percentage)
+        self.threadpool.start(self.worker)
+
+    def stop_event(self):
+        self.stop_worker = True
+
+    def reset_event(self):
+        self.reset_worker = True
+        if self.threadpool.activeThreadCount() == 0:
+            self.set_percentage(1.0)
+
+    def __get_stop_worker(self):
+        return self.stop_worker
+
+    def __get_reset_worker(self):
+        return self.reset_worker
+
+    def __set_stop_worker(self, val):
+        self.stop_worker = val
+
+    def __set_reset_worker(self, val):
+        self.reset_worker = val
+
+
+class Worker(QRunnable):
+    def __init__(self, fn, *args, **kwargs):
+        super(Worker, self).__init__()
+
+        self.fn = fn
+        self.args = args
+        self.kwargs = kwargs
+
+    def run(self):
+        """
+        Initialise the runner function with passed args, kwargs.
+        """
+        self.fn(*self.args, **self.kwargs)
